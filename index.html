@@ -124,7 +124,7 @@
 <div class="col-md-12 heading-section text-center ftco-animate">
 <span class="subheading">Skills</span>
 <h2 class="mb-4">My Skills</h2>
-<p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia</p>
+<p>What I have learned so far.</p>
 </div>
 </div>
 <div class="row">
@@ -427,16 +427,16 @@
 <form action="https://formspree.io/f/xjvjaaad"
   method="POST" class="bg-light p-4 p-md-5 contact-form">
 <div class="form-group">
-<input type="text" class="form-control" placeholder="Your Name" name="name">
+<input type="text" class="form-control" placeholder="Your Name" name="name" required>
 </div>
 <div class="form-group">
-<input type="text" class="form-control" placeholder="Your Email" name="email">
+<input type="email" class="form-control" placeholder="Your Email" name="email" required>
 </div>
-<!-- <div class="form-group">
-<input type="text" class="form-control" placeholder="Subject" name="subject">
-</div> -->
+ <div class="form-group">
+<input type="number"  name="phone" class="form-control" placeholder="number">
+</div>
 <div class="form-group">
-<textarea name="" id="" cols="30" rows="7" class="form-control" placeholder="Message" name="message" id="message"></textarea>
+<textarea class="form-control" name="message" rows="10" data-rule="required" placeholder="Message" required></textarea>
 </div>
 <div class="form-group">
 <input type="submit" value="Send Message" class="btn btn-primary py-3 px-5">
