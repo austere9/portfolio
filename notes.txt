@@ -1,0 +1,66 @@
+router configuration 
+enable 
+connfigure terminal 
+no ip domain lookup 
+enable secrect class
+line con 0
+password cisco
+login
+logging synchronous
+exit
+
+
+VLAN and trunk on switches
+
+vlan 10
+vlan 13
+
+interface fa0/2
+ switchport mode access
+ switchport access vlan 10
+
+interface range gi0/1 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,13
+
+show vlan brief
+show interfaces trunk
+
+OSPF
+enable
+configure terminal
+router ospf 1
+network 192.168.20.0 0.0.0.255 area 0
+network 10.1.1.0 0.0.0.3 area 0
+network 10.2.2.0 0.0.0.3 area 0
+end
+
+tracet
+tracert 192.168.30.3
+
+Default Route 
+ip route 0.0.0.0 0.0.0.0 209.165.200.161
+router ospf 1
+default-information originate
+show ip route
+show ip protocols
+show ip ospf
+show ip ospf neighbor
+
+
+ip nat inside source static 192.168.20.254 209.165.200.193
+access-list 1 permit 192.168.0.0 0.0.255.255
+access-list 1 permit 10.0.0.0 0.255.255.255
+ip nat pool NAT_POOL 209.165.200.194 209.165.200.206 netmask 255.255.255.240
+ip nat inside source list 1 pool NAT_POOL overload
+interface fa0/1
+ip nat inside
+exit
+interface fa0/0
+ip nat outside
+exit
+ip route 192.168.0.0 255.255.0.0 209.165.200.162
+ip route 10.0.0.0 255.0.0.0 209.165.200.162
+show ip nat translations
+
