@@ -1,66 +1,67 @@
-router configuration 
-enable 
-connfigure terminal 
-no ip domain lookup 
-enable secrect class
-line con 0
-password cisco
-login
-logging synchronous
-exit
+import java.io.IOException;
+import java.util.StringTokenizer;
+import java.util.Iterator;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-VLAN and trunk on switches
+public class AverageRating {
 
-vlan 10
-vlan 13
+    public static class RatingMapper
+            extends Mapper<LongWritable, Text, Text, FloatWritable> {
 
-interface fa0/2
- switchport mode access
- switchport access vlan 10
+        private Text productId = new Text();
+        private FloatWritable rating = new FloatWritable();
 
-interface range gi0/1 - 2
- switchport trunk encapsulation dot1q
- switchport mode trunk
- switchport trunk allowed vlan 10,13
+        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+            String[] parts = value.toString().split(",");
+            if (parts.length == 4) {
+                try {
+                    productId.set(parts[1]); // Product ID
+                    rating.set(Float.parseFloat(parts[2])); // Rating
+                    context.write(productId, rating);
+                } catch (NumberFormatException e) {
+                    // skip invalid line
+                }
+            }
+        }
+    }
 
-show vlan brief
-show interfaces trunk
+    public static class AverageReducer
+            extends Reducer<Text, FloatWritable, Text, FloatWritable> {
 
-OSPF
-enable
-configure terminal
-router ospf 1
-network 192.168.20.0 0.0.0.255 area 0
-network 10.1.1.0 0.0.0.3 area 0
-network 10.2.2.0 0.0.0.3 area 0
-end
+        public void reduce(Text key, Iterable<FloatWritable> values, Context context)
+                throws IOException, InterruptedException {
+            float sum = 0;
+            int count = 0;
+            for (FloatWritable val : values) {
+                sum += val.get();
+                count++;
+            }
+            if (count > 0) {
+                context.write(key, new FloatWritable(sum / count));
+            }
+        }
+    }
 
-tracet
-tracert 192.168.30.3
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "average rating");
 
-Default Route 
-ip route 0.0.0.0 0.0.0.0 209.165.200.161
-router ospf 1
-default-information originate
-show ip route
-show ip protocols
-show ip ospf
-show ip ospf neighbor
+        job.setJarByClass(AverageRating.class);
+        job.setMapperClass(RatingMapper.class);
+        job.setReducerClass(AverageReducer.class);
 
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(FloatWritable.class);
 
-ip nat inside source static 192.168.20.254 209.165.200.193
-access-list 1 permit 192.168.0.0 0.0.255.255
-access-list 1 permit 10.0.0.0 0.255.255.255
-ip nat pool NAT_POOL 209.165.200.194 209.165.200.206 netmask 255.255.255.240
-ip nat inside source list 1 pool NAT_POOL overload
-interface fa0/1
-ip nat inside
-exit
-interface fa0/0
-ip nat outside
-exit
-ip route 192.168.0.0 255.255.0.0 209.165.200.162
-ip route 10.0.0.0 255.0.0.0 209.165.200.162
-show ip nat translations
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
