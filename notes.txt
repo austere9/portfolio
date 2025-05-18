@@ -75,22 +75,25 @@ public class AmazonRatingsAverage {
     }
 
     public static void main(String[] args) throws Exception {
-        Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "amazon ratings average");
+    Configuration conf = new Configuration();
+    Job job = Job.getInstance(conf, "amazon ratings average");
 
-        job.setJarByClass(AmazonRatingsAverage.class);
-        job.setMapperClass(RatingMapper.class);
-        job.setReducerClass(AverageReducer.class);
+    job.setJarByClass(AmazonRatingsAverage.class);
+    job.setMapperClass(RatingMapper.class);
+    job.setReducerClass(AverageReducer.class);
 
-        // Final output key/value types
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(DoubleWritable.class);
+    // 🧠 Tell Hadoop what Mapper emits
+    job.setMapOutputKeyClass(Text.class);
+    job.setMapOutputValueClass(Text.class);
 
-        FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+    // ✅ Final output types (Reducer output)
+    job.setOutputKeyClass(Text.class);
+    job.setOutputValueClass(DoubleWritable.class);
 
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
-    }
+    FileInputFormat.addInputPath(job, new Path(args[0]));
+    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+    System.exit(job.waitForCompletion(true) ? 0 : 1);
 }
 
 
