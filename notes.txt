@@ -1,29 +1,4 @@
-javac -classpath `hadoop classpath` -d . AverageRating.java
-
-
-jar -cvf AverageRating.jar *.class
-
-hdfs dfs -mkdir /input
-
-
-hdfs dfs -put amazon_reviews.csv /input/
-
-hadoop jar AverageRating.jar AverageRating /input /output
-
-
-hdfs dfs -rm -r /output
-
-
-hdfs dfs -cat /output/part-r-00000
-
-hdfs dfs -get /output output
-
-
-https://mega.nz/file/6b4RTJQA#veWmyqZd1lFZlu-oAFSOZAbGDtqv_YwJE9lCdutcqqY
-
 import java.io.IOException;
-import java.util.StringTokenizer;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
@@ -36,32 +11,38 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class AmazonRatingsAverage {
 
-    public static class RatingMapper
-            extends Mapper<Object, Text, Text, Text> {
+    public static class RatingMapper extends Mapper<Object, Text, Text, Text> {
 
         private Text productId = new Text();
         private Text ratingInfo = new Text();
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String line = value.toString();
-            String[] parts = line.split(" ");
-            
-            // Skip header if present or invalid lines
+
+            // Skip header if present
+            if (line.startsWith("UserID") || line.trim().isEmpty()) return;
+
+            String[] parts = line.split(",");
+
+            // Check if the line has at least 4 parts (UserID, ProductID, Rating, Timestamp)
             if (parts.length >= 4) {
-                // Extract productId and rating
-                String product = parts[1];
-                String rating = parts[2];
-                
-                productId.set(product);
-                // We'll pass the rating as "rating,1" to count entries in reducer
-                ratingInfo.set(rating + ",1");
-                context.write(productId, ratingInfo);
+                String product = parts[1].trim();  // ProductID
+                String rating = parts[2].trim();   // Rating
+
+                // Ensure rating is a valid number
+                try {
+                    Double.parseDouble(rating);
+                    productId.set(product);
+                    ratingInfo.set(rating + ",1");
+                    context.write(productId, ratingInfo);
+                } catch (NumberFormatException e) {
+                    // Skip if rating is not a valid number
+                }
             }
         }
     }
 
-    public static class AverageReducer
-            extends Reducer<Text, Text, Text, DoubleWritable> {
+    public static class AverageReducer extends Reducer<Text, Text, Text, DoubleWritable> {
 
         private DoubleWritable result = new DoubleWritable();
 
@@ -69,20 +50,23 @@ public class AmazonRatingsAverage {
                 throws IOException, InterruptedException {
             double sum = 0;
             int count = 0;
-            
+
             for (Text val : values) {
                 String[] parts = val.toString().split(",");
-                double rating = Double.parseDouble(parts[0]);
-                int currentCount = Integer.parseInt(parts[1]);
-                
-                sum += rating;
-                count += currentCount;
+                try {
+                    double rating = Double.parseDouble(parts[0]);
+                    int currentCount = Integer.parseInt(parts[1]);
+
+                    sum += rating;
+                    count += currentCount;
+                } catch (NumberFormatException e) {
+                    // Skip malformed data
+                }
             }
-            
+
             if (count > 0) {
                 double average = sum / count;
-                // Round to 2 decimal places
-                average = Math.round(average * 100.0) / 100.0;
+                average = Math.round(average * 100.0) / 100.0;  // round to 2 decimal places
                 result.set(average);
                 context.write(key, result);
             }
@@ -92,13 +76,17 @@ public class AmazonRatingsAverage {
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "amazon ratings average");
+
         job.setJarByClass(AmazonRatingsAverage.class);
         job.setMapperClass(RatingMapper.class);
         job.setReducerClass(AverageReducer.class);
+
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
+        job.setOutputValueClass(Text.class);  // Mapper emits Text, Reducer reads Text
+
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
