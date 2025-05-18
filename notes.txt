@@ -11,10 +11,9 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class AmazonRatingsAverage {
 
-    public static class RatingMapper extends Mapper<Object, Text, Text, Text> {
-
+    public static class RatingMapper extends Mapper<Object, Text, Text, DoubleWritable> {
         private Text productId = new Text();
-        private Text ratingInfo = new Text();
+        private DoubleWritable ratingValue = new DoubleWritable();
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String line = value.toString();
@@ -25,49 +24,40 @@ public class AmazonRatingsAverage {
             String[] parts = line.split(",");
 
             // Validate expected CSV columns
-            if (parts.length >= 4) {
+            if (parts.length >= 3) {
                 String product = parts[1].trim();  // ProductID
                 String rating = parts[2].trim();   // Rating
 
                 try {
-                    Double.parseDouble(rating);  // Validation
+                    double parsedRating = Double.parseDouble(rating);
                     productId.set(product);
-                    ratingInfo.set(rating + ",1");
-                    context.write(productId, ratingInfo);
+                    ratingValue.set(parsedRating);
+                    context.write(productId, ratingValue);
 
-                    // Optional debug output
-                    System.err.println("MAP: " + product + " => " + rating);
+                    // Optional debug output to stderr
+                    System.err.println("MAP: " + product + " => " + parsedRating);
                 } catch (NumberFormatException e) {
-                    // Skip bad ratings
+                    // Ignore malformed rating entries
                 }
             }
         }
     }
 
-    public static class AverageReducer extends Reducer<Text, Text, Text, DoubleWritable> {
-
+    public static class AverageReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
         private DoubleWritable result = new DoubleWritable();
 
-        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            double sum = 0;
+        public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+            double sum = 0.0;
             int count = 0;
 
-            for (Text val : values) {
-                String[] parts = val.toString().split(",");
-                try {
-                    double rating = Double.parseDouble(parts[0]);
-                    int currentCount = Integer.parseInt(parts[1]);
-
-                    sum += rating;
-                    count += currentCount;
-                } catch (NumberFormatException e) {
-                    // Skip malformed values
-                }
+            for (DoubleWritable val : values) {
+                sum += val.get();
+                count++;
             }
 
             if (count > 0) {
                 double average = sum / count;
-                average = Math.round(average * 100.0) / 100.0;
+                average = Math.round(average * 100.0) / 100.0; // round to 2 decimals
                 result.set(average);
                 context.write(key, result);
             }
@@ -75,27 +65,27 @@ public class AmazonRatingsAverage {
     }
 
     public static void main(String[] args) throws Exception {
-    Configuration conf = new Configuration();
-    Job job = Job.getInstance(conf, "amazon ratings average");
+        if (args.length != 2) {
+            System.err.println("Usage: AmazonRatingsAverage <input path> <output path>");
+            System.exit(-1);
+        }
 
-    job.setJarByClass(AmazonRatingsAverage.class);
-    job.setMapperClass(RatingMapper.class);
-    job.setReducerClass(AverageReducer.class);
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Amazon Product Ratings Average");
 
-    // 🧠 Tell Hadoop what Mapper emits
-    job.setMapOutputKeyClass(Text.class);
-    job.setMapOutputValueClass(Text.class);
+        job.setJarByClass(AmazonRatingsAverage.class);
+        job.setMapperClass(RatingMapper.class);
+        job.setReducerClass(AverageReducer.class);
 
-    // ✅ Final output types (Reducer output)
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(DoubleWritable.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(DoubleWritable.class);
 
-    FileInputFormat.addInputPath(job, new Path(args[0]));
-    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(DoubleWritable.class);
 
-    System.exit(job.waitForCompletion(true) ? 0 : 1);
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
 }
-
-
-
-haha
