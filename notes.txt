@@ -11,22 +11,23 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class AmazonRatingsAverage {
 
+    // MAPPER CLASS
     public static class RatingMapper extends Mapper<Object, Text, Text, DoubleWritable> {
         private Text productId = new Text();
         private DoubleWritable ratingValue = new DoubleWritable();
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            String line = value.toString();
+            String line = value.toString().trim();
 
             // Skip header or empty lines
-            if (line.startsWith("UserID") || line.trim().isEmpty()) return;
+            if (line.isEmpty() || line.startsWith("AKM") || line.startsWith("UserID")) return;
 
-            String[] parts = line.split(",");
+            // Change the delimiter based on your file (tab-delimited here)
+            String[] parts = line.split("\t");
 
-            // Validate expected CSV columns
             if (parts.length >= 3) {
-                String product = parts[1].trim();  // ProductID
-                String rating = parts[2].trim();   // Rating
+                String product = parts[1].trim(); // Product ID is column B
+                String rating = parts[2].trim();  // Rating is column C
 
                 try {
                     double parsedRating = Double.parseDouble(rating);
@@ -34,19 +35,21 @@ public class AmazonRatingsAverage {
                     ratingValue.set(parsedRating);
                     context.write(productId, ratingValue);
 
-                    // Optional debug output to stderr
+                    // Debug
                     System.err.println("MAP: " + product + " => " + parsedRating);
                 } catch (NumberFormatException e) {
-                    // Ignore malformed rating entries
+                    // Skip if rating is invalid
                 }
             }
         }
     }
 
+    // REDUCER CLASS
     public static class AverageReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
         private DoubleWritable result = new DoubleWritable();
 
-        public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+        public void reduce(Text key, Iterable<DoubleWritable> values, Context context)
+                throws IOException, InterruptedException {
             double sum = 0.0;
             int count = 0;
 
@@ -56,14 +59,14 @@ public class AmazonRatingsAverage {
             }
 
             if (count > 0) {
-                double average = sum / count;
-                average = Math.round(average * 100.0) / 100.0; // round to 2 decimals
+                double average = Math.round((sum / count) * 100.0) / 100.0; // Round to 2 decimals
                 result.set(average);
                 context.write(key, result);
             }
         }
     }
 
+    // DRIVER / MAIN METHOD
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
             System.err.println("Usage: AmazonRatingsAverage <input path> <output path>");
