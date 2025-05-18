@@ -1,6 +1,7 @@
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -11,44 +12,62 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class AmazonRatingsAverage {
 
-    public static class RatingMapper extends Mapper<Object, Text, Text, DoubleWritable> {
+    public static class RatingMapper 
+        extends Mapper<Object, Text, Text, DoubleWritable> {
+        
         private Text productId = new Text();
         private DoubleWritable ratingValue = new DoubleWritable();
 
-        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+        public void map(Object key, Text value, Context context) 
+                throws IOException, InterruptedException {
+            
             String line = value.toString().trim();
+            if (line.isEmpty()) {
+                System.err.println("Skipping empty line");
+                return;
+            }
 
-            if (line.isEmpty()) return;
+            // Split by comma and trim whitespace
+            String[] parts = line.split("\\s*,\\s*");
 
-            // Split by comma (your file is comma-separated)
-            String[] parts = line.split(",");
+            // Ensure we have UserID, ProductID, Rating
+            if (parts.length < 3) {
+                System.err.println("Skipping malformed line: " + line);
+                return;
+            }
 
-            // Must have at least 3 fields: UserID, ProductID, Rating
-            if (parts.length >= 3) {
-                String product = parts[1].trim();
-                String rating = parts[2].trim();
+            String product = parts[1].trim();
+            String rating = parts[2].trim();
 
-                if (product.isEmpty() || rating.isEmpty()) return;
+            if (product.isEmpty() || rating.isEmpty()) {
+                System.err.println("Skipping due to empty product/rating: " + line);
+                return;
+            }
 
-                try {
-                    double parsedRating = Double.parseDouble(rating);
-                    productId.set(product);
-                    ratingValue.set(parsedRating);
-                    context.write(productId, ratingValue);
-                } catch (NumberFormatException e) {
-                    // Skip bad lines
-                }
+            try {
+                double parsedRating = Double.parseDouble(rating);
+                productId.set(product);
+                ratingValue.set(parsedRating);
+                context.write(productId, ratingValue);
+                System.err.println("Mapped: " + product + " → " + parsedRating);
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid rating format: " + rating);
             }
         }
     }
 
-    public static class AverageReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+    public static class AverageReducer 
+        extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+        
         private DoubleWritable result = new DoubleWritable();
 
         public void reduce(Text key, Iterable<DoubleWritable> values, Context context)
                 throws IOException, InterruptedException {
+            
             double sum = 0;
             int count = 0;
+
+            System.err.println("Reducing product: " + key.toString());
 
             for (DoubleWritable val : values) {
                 sum += val.get();
@@ -59,6 +78,7 @@ public class AmazonRatingsAverage {
                 double average = Math.round((sum / count) * 100.0) / 100.0;
                 result.set(average);
                 context.write(key, result);
+                System.err.println("Output: " + key + " → " + average);
             }
         }
     }
@@ -76,10 +96,15 @@ public class AmazonRatingsAverage {
         job.setMapperClass(RatingMapper.class);
         job.setReducerClass(AverageReducer.class);
 
-        job.setMapOutputKeyClass(Text.class);
-        job.setMapOutputValueClass(DoubleWritable.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(DoubleWritable.class);
+
+        // Delete output directory if it exists
+        Path outputPath = new Path(args[1]);
+        FileSystem fs = FileSystem.get(conf);
+        if (fs.exists(outputPath)) {
+            fs.delete(outputPath, true);
+        }
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
