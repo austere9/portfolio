@@ -17,3 +17,6 @@ hdfs dfs -rm -r /output
 hdfs dfs -cat /output/part-r-00000
 
 hdfs dfs -get /output output
+
+
+https://mega.nz/file/6b4RTJQA#veWmyqZd1lFZlu-oAFSOZAbGDtqv_YwJE9lCdutcqqY
