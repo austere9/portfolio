@@ -90,24 +90,36 @@ public class AmazonRatingsAverage {
         }
 
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "Amazon Product Ratings Average");
+        // Set memory allocations
+        conf.set("mapreduce.map.memory.mb", "1024");
+        conf.set("mapreduce.reduce.memory.mb", "2048");
+        conf.set("mapreduce.job.jvm.numtasks", "-1");
 
+        Job job = Job.getInstance(conf, "Amazon Product Ratings Average");
         job.setJarByClass(AmazonRatingsAverage.class);
+
+        // Set mapper and reducer
         job.setMapperClass(RatingMapper.class);
         job.setReducerClass(AverageReducer.class);
+        job.setCombinerClass(AverageReducer.class);
 
+        // Explicitly set output types
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(DoubleWritable.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(DoubleWritable.class);
 
-        // Delete output directory if it exists
+        // Clean up output directory
         Path outputPath = new Path(args[1]);
         FileSystem fs = FileSystem.get(conf);
         if (fs.exists(outputPath)) {
+            System.out.println("Deleting existing output path: " + outputPath);
             fs.delete(outputPath, true);
         }
 
+        // Set input/output paths
         FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        FileOutputFormat.setOutputPath(job, outputPath);
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
