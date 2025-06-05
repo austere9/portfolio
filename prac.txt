@@ -1,0 +1,8 @@
+1. ./start-hadoop.sh
+2. Open Firefox -> type localhost:50070
+3. type jps in terminal
+4. hadoop fs -mkdir -p /user/sushila/input
+5. hadoop fs -put /ratingelectronics.csv /user/sushila/input 
+6. hadoop fs -ls /user/sushila/input
+7. hadoop jar amazonrating.jar AmazonRatingsAverage /user/sushila/input/ratingelectronics.csv /user/sushila/output/
+8. hadoop fs -cat /user/sushila/output/part-r-00000 | head - 10
